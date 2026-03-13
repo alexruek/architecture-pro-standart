@@ -126,7 +126,7 @@
 
 ### Диаграммы C4
 
-![](.Diagrams/c4_context.png)
+![](./Diagrams/c4_context.png)
 
 ![](./Diagrams/c4_containers.png)
 
