@@ -1,0 +1,14 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+Person(client, "Клиент", "Физическое лицо, пользующееся услугами банка")
+System(bank_standard, "Информационная система банка Стандарт", "Позволяет клиентам открывать депозиты и просматривать ставки")
+
+System_Ext(sms_gateway, "СМС-шлюз", "Внешний шлюз для отправки СМС-сообщений")
+System_Ext(telecom, "Телеком-оператор", "Внешний оператор связи")
+
+Rel(client, bank_standard, "Пользуется сайтом и интернет-банком", "HTTPS")
+Rel(bank_standard, sms_gateway, "Отправляет запросы на СМС", "REST API")
+Rel(sms_gateway, telecom, "Передает сообщения")
+Rel(telecom, client, "Доставляет СМС-коды и уведомления")
+@enduml

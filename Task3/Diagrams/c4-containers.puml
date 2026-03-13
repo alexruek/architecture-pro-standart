@@ -1,0 +1,34 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Person(client, "Клиент", "Пользователь банка")
+
+System_Boundary(bank_boundary, "Банк Стандарт") {
+    Container(website, "Сайт", "PHP, React", "Показывает ставки, принимает заявки")
+    Container(ib, "Интернет-банк", "ASP.NET MVC 4.5", "Личный кабинет клиента")
+    Container(deposit_service, "Deposit Application Service", "Java Spring Boot", "Управляет циклом заявок")
+    Container(rate_service, "Rate Service", "Java Spring Boot", "Управляет ставками")
+    ContainerDb(postgres, "PostgreSQL", "БД", "Хранение заявок и ставок")
+    Container(abs, "АБС", "Oracle, Delphi", "Основная учетная система")
+    Container(kafka, "Kafka", "Message Broker", "Асинхронная очередь сообщений")
+}
+
+System_Ext(sms_gateway, "СМС-шлюз", "Отправка СМС")
+
+Rel(client, website, "Видит ставки, подает заявку", "HTTPS")
+Rel(client, ib, "Видит персон. предложения, подает заявку", "HTTPS")
+
+Rel(website, rate_service, "Запрашивает общие ставки", "REST API")
+Rel(ib, rate_service, "Запрашивает персон. ставки", "REST API")
+
+Rel(website, deposit_service, "Отправляет заявку", "REST API")
+Rel(ib, deposit_service, "Отправляет заявку", "REST API")
+
+Rel(deposit_service, postgres, "Сохраняет данные", "SQL")
+Rel(rate_service, postgres, "Читает/пишет ставки", "SQL")
+
+Rel(deposit_service, kafka, "Публикует заявку", "Produce")
+Rel(abs, kafka, "Получает заявку", "Consume")
+
+Rel(deposit_service, sms_gateway, "Запрос на СМС", "REST API")
+@enduml
