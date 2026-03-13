@@ -1,0 +1,85 @@
+@startuml c4-containers
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Диаграмма контейнеров (C4 Level 2) — Подача заявки на кредит онлайн
+
+Person(new_client, "Новый клиент", "Подает заявку\nчерез сайт")
+Person(existing_client, "Существующий клиент", "Подает заявку\nчерез интернет-банк")
+Person(branch_employee, "Сотрудник отделения")
+Person(credit_manager, "Сотрудник отдела\nкредитования")
+
+System_Boundary(site_boundary, "Сайт") {
+    Container(site_frontend, "Frontend сайта", "React.js", "Форма заявки на кредит;\nотображение статуса решения")
+    Container(site_backend, "Backend сайта", "PHP", "Передает заявку\nв Loan Application Service")
+}
+
+System_Boundary(ibank_boundary, "Интернет-банк") {
+    Container(ibank_app, "ИБ Приложение", "ASP.NET MVC 4.5\n/ .NET 4.5", "Страницы кредитного\nпродукта; СМС-подтверждение\nсилами команды банка")
+    Container(ibank_db, "ИБ БД", "MS SQL", "Данные интернет-банка")
+}
+
+System_Boundary(loan_boundary, "Loan Application Service") {
+    Container(loan_api, "Loan API", "Java Spring Boot", "REST API приема заявок;\nпредоставление предодобренных\nпредложений")
+    Container(loan_kafka_producer, "Kafka Producer", "Java", "Публикует заявки\nв топик Kafka")
+    Container(loan_kafka_consumer, "Kafka Consumer\n(статусы)", "Java", "Получает обратные\nстатусы из Кредитного\nконвейера")
+    Container(loan_db, "Loan DB", "PostgreSQL", "Реестр онлайн-заявок;\nпредодобренные предложения")
+}
+
+System_Boundary(batch_boundary, "Pre-Approval Batch") {
+    Container(batch_job, "Batch Job", "Java Spring Batch", "Ночной процесс расчета\nпредодобренных предложений\nна основе кэша скоринга")
+}
+
+System_Boundary(conveyor_boundary, "Кредитный конвейер") {
+    Container(conveyor_consumer, "Kafka Consumer\n(заявки)", "Java", "Читает новые заявки\nиз Kafka и создаёт\nзадачи в Camunda")
+    Container(conveyor_bpm, "Camunda BPM", "Java / Camunda", "Бизнес-процесс обработки\nкредитной заявки")
+    Container(conveyor_db, "Конвейер БД", "Oracle", "Данные кредитных заявок\nи бизнес-процессов")
+}
+
+System_Boundary(abs_boundary, "АБС") {
+    Container(abs_app, "АБС Приложение", "Delphi", "Десктоп-клиент\nдля сотрудников")
+    Container(abs_db, "АБС БД", "Oracle / PL-SQL", "Клиентская база;\nданные заявок из отделений")
+}
+
+System_Ext(scoring_ext, "Система скоринга", "Python / Flask\n/ PostgreSQL")
+System_Ext(bki_ext, "БКИ", "Внешний REST API")
+System_Ext(sms_ext, "СМС-шлюз")
+
+' Клиенты
+Rel(new_client, site_frontend, "Заполняет форму заявки")
+Rel(existing_client, ibank_app, "Подает заявку,\nсмотрит предложения")
+Rel(branch_employee, abs_app, "Работает с заявками")
+Rel(credit_manager, conveyor_bpm, "Обрабатывает заявки")
+
+' Сайт → Loan Service
+Rel(site_frontend, site_backend, "Отправляет данные", "HTTPS")
+Rel(site_backend, loan_api, "Передает заявку", "REST API / HTTPS")
+
+' ИБ → Loan Service
+Rel(ibank_app, loan_api, "Передает заявку;\nполучает предложения", "REST API / HTTPS")
+Rel(ibank_app, ibank_db, "Читает / пишет данные", "ADO.NET")
+
+' Loan Service внутри
+Rel(loan_api, loan_db, "Сохраняет заявки и предложения", "JDBC")
+Rel(loan_api, loan_kafka_producer, "Публикует заявку")
+Rel(loan_kafka_consumer, loan_db, "Обновляет статус заявки")
+Rel(loan_api, sms_ext, "Отправляет СМС", "REST API")
+Rel(loan_api, bki_ext, "Запрашивает данные\nнового клиента", "REST API / HTTPS")
+
+' Kafka → Кредитный конвейер
+Rel(loan_kafka_producer, conveyor_consumer, "Заявки онлайн", "Kafka topic: loan-applications")
+Rel(conveyor_consumer, conveyor_bpm, "Создаёт задачу")
+Rel(conveyor_bpm, conveyor_db, "Читает / пишет данные", "JDBC")
+Rel(conveyor_bpm, scoring_ext, "Вызывает скоринг", "REST API")
+Rel(conveyor_bpm, loan_kafka_consumer, "Публикует статус", "Kafka topic: loan-statuses")
+
+' АБС → Кредитный конвейер (старый канал)
+Rel(abs_db, conveyor_db, "Заявки из отделений", "БД / раз в сутки")
+
+' Batch
+Rel(batch_job, abs_db, "Читает клиентскую базу\n(ночью)", "JDBC")
+Rel(batch_job, scoring_ext, "Использует кэш скоринга\n(без новых вызовов)")
+Rel(batch_job, loan_db, "Сохраняет предодобренные\nпредложения", "JDBC")
+
+@enduml

@@ -1,0 +1,40 @@
+@startuml c4-context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Диаграмма контекста (C4 Level 1) — Подача заявки на кредит онлайн
+
+Person(new_client, "Новый клиент", "Подает заявку на кредит\nчерез сайт")
+Person(existing_client, "Существующий клиент", "Подает заявку на кредит\nчерез интернет-банк")
+Person(branch_employee, "Сотрудник отделения", "Работает с заявками\nклиентов в АБС")
+Person(credit_manager, "Сотрудник отдела\nкредитования", "Обрабатывает заявки\nв Кредитном конвейере")
+
+System(site, "Сайт", "PHP / React.js.\nПодача заявки\nдля новых клиентов")
+System(ibank, "Интернет-банк", "ASP.NET MVC 4.5 / MS SQL.\nПодача заявки\nдля существующих клиентов")
+System(loan_svc, "Loan Application Service", "Сервис кредитных заявок.\nJava Spring Boot / PostgreSQL.\nЕдиный реестр онлайн-заявок")
+System(preapproval_batch, "Pre-Approval Batch", "Ночной batch-сервис.\nФормирует предодобренные\nпредложения")
+System(abs, "АБС", "Автоматизированная\nбанковская система.\nDelphi / Oracle / PL-SQL")
+System(conveyor, "Кредитный конвейер", "BPM Camunda / Oracle.\nОбработка заявок\nна кредит")
+System(scoring, "Система кредитного\nскоринга", "Python / Flask / PostgreSQL.\nОпределяет кредитный\nрейтинг клиента")
+System(sms, "СМС-шлюз", "Отправка СМС-уведомлений\nклиентам")
+System_Ext(bki, "Бюро кредитных\nисторий (БКИ)", "Внешний источник\nданных о кредитной\nистории клиента")
+
+Rel(new_client, site, "Подает заявку на кредит")
+Rel(existing_client, ibank, "Подает заявку, смотрит\nпредодобренные предложения")
+Rel(branch_employee, abs, "Создает / видит заявки\nклиентов")
+Rel(credit_manager, conveyor, "Обрабатывает заявки")
+
+Rel(site, loan_svc, "Передает заявку", "REST API / HTTPS")
+Rel(ibank, loan_svc, "Передает заявку;\nполучает предодобренные предложения", "REST API / HTTPS")
+Rel(loan_svc, conveyor, "Передает заявки", "Kafka")
+Rel(loan_svc, sms, "Отправляет СМС-уведомления", "REST API")
+Rel(loan_svc, bki, "Запрашивает данные\nдля новых клиентов", "REST API")
+Rel(preapproval_batch, abs, "Читает клиентскую базу", "ночной batch")
+Rel(preapproval_batch, scoring, "Использует кэш скоринга\n(без новых вызовов)")
+Rel(preapproval_batch, loan_svc, "Сохраняет предодобренные\nпредложения", "REST API")
+Rel(abs, conveyor, "Передает заявки из отделений", "БД / раз в сутки")
+Rel(conveyor, scoring, "Вызывает скоринг\nпри обработке заявки", "REST API")
+Rel(conveyor, loan_svc, "Возвращает статус заявки", "Kafka / webhook")
+
+@enduml
