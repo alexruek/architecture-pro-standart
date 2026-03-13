@@ -1,0 +1,48 @@
+@startuml c4-containers
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Диаграмма контейнеров (C4 Level 2) — Передача ставок в кол-центры
+
+Person(backoffice, "Сотрудник бэк-офиса", "Обновляет ставки")
+Person(operator_cc, "Оператор кол-центра", "Консультирует клиентов")
+Person(operator_pcc, "Оператор партнёрского\nкол-центра", "Консультирует клиентов")
+
+System_Boundary(abs_boundary, "АБС") {
+    Container(abs_db, "Oracle DB", "Oracle / PL-SQL", "Хранит данные банка,\nвключая актуальные ставки")
+    Container(abs_app, "АБС Приложение", "Delphi", "Десктоп-клиент\nдля сотрудников")
+}
+
+System_Boundary(rate_boundary, "Rate Service") {
+    Container(rate_api, "Rate API", "Java Spring Boot", "REST API для получения\nактуальных ставок")
+    Container(rate_scheduler, "Scheduler", "Java / Quartz", "Генерирует CSV-файл\nпо расписанию (1 раз в сутки)")
+    Container(rate_db, "Rate DB", "PostgreSQL", "Хранит актуальные\nставки по депозитам")
+}
+
+System_Boundary(cc_boundary, "Система кол-центра") {
+    Container(cc_ui, "UI оператора", "React.js", "Интерфейс оператора\nс разделом «Ставки»")
+    Container(cc_backend, "CC Backend", "Java Spring Boot", "Бизнес-логика кол-центра,\nинтеграция с Rate Service")
+    Container(cc_db, "CC DB", "PostgreSQL", "Данные кол-центра,\nкэш ставок")
+}
+
+System_Boundary(sftp_boundary, "SFTP-инфраструктура банка") {
+    Container(sftp_server, "SFTP-сервер", "OpenSSH", "Файловый обменник;\nдоступ по SSH-ключам,\nограничен по IP партнёра")
+}
+
+System_Ext(partner_cc, "Система партнёрского\nкол-центра", "Внешняя система.\nЗабирает CSV по SFTP,\nотображает ставки операторам")
+
+Rel(backoffice, abs_app, "Обновляет ставки", "Десктоп-клиент")
+Rel(abs_app, abs_db, "Читает / пишет данные", "PL-SQL")
+Rel(abs_db, rate_api, "Передаёт обновлённые ставки", "REST API (триггер/polling)")
+Rel(rate_api, rate_db, "Сохраняет / читает ставки", "JDBC")
+Rel(rate_scheduler, rate_db, "Читает актуальные ставки", "JDBC")
+Rel(rate_scheduler, sftp_server, "Загружает CSV-файл", "SFTP")
+Rel(cc_backend, rate_api, "Запрашивает ставки", "REST API / polling")
+Rel(cc_backend, cc_db, "Кэширует ставки", "JDBC")
+Rel(cc_ui, cc_backend, "Отображает ставки оператору", "HTTP / JSON")
+Rel(operator_cc, cc_ui, "Просматривает ставки")
+Rel(sftp_server, partner_cc, "Партнёр забирает CSV-файл", "SFTP pull")
+Rel(operator_pcc, partner_cc, "Просматривает ставки")
+
+@enduml
