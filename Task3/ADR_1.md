@@ -86,11 +86,11 @@
 
 ### Уровень 1. Контекст системы (System Context)
 
-![](./Diagrams/c4-system.png)
+![](./Diagrams/c4_context.png)
 
 ### Уровень 2. Контейнеры (Containers)
 
-![](./Diagrams/c4-containers.png)
+![](./Diagrams/c4_containers.png)
 ---------------------------------
 
 ## Последствия

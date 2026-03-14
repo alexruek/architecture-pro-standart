@@ -1,34 +1,119 @@
-@startuml
+@startuml c4-containers
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
 
-Person(client, "Клиент", "Пользователь банка")
+LAYOUT_WITH_LEGEND()
 
-System_Boundary(bank_boundary, "Банк Стандарт") {
-    Container(website, "Сайт", "PHP, React", "Показывает ставки, принимает заявки")
-    Container(ib, "Интернет-банк", "ASP.NET MVC 4.5", "Личный кабинет клиента")
-    Container(deposit_service, "Deposit Application Service", "Java Spring Boot", "Управляет циклом заявок")
-    Container(rate_service, "Rate Service", "Java Spring Boot", "Управляет ставками")
-    ContainerDb(postgres, "PostgreSQL", "БД", "Хранение заявок и ставок")
-    Container(abs, "АБС", "Oracle, Delphi", "Основная учетная система")
-    Container(kafka, "Kafka", "Message Broker", "Асинхронная очередь сообщений")
+title Диаграмма контейнеров (C4 Level 2) — Онлайн-открытие депозитов и накопительных счетов (MVP)
+
+Person(new_client, "Новый клиент")
+Person(existing_client, "Существующий клиент")
+Person(backoffice_deposit, "Сотрудник бэк-офиса\n(депозиты)")
+Person(backoffice_credit, "Сотрудник бэк-офиса\n(кредиты)")
+Person(cc_operator, "Оператор кол-центра")
+
+' ──────────────────────────────────────────
+' ИНТЕРНЕТ-БАНК — детализация (требование задания)
+' ──────────────────────────────────────────
+System_Boundary(ibank_boundary, "Интернет-банк (платформа подрядчика)") {
+    Container(ibank_ui, "Web UI", "ASP.NET MVC 4.5\n/ Razor Views", "Страницы депозитов:\nсписок продуктов, форма заявки,\nстраница подтверждения СМС-кодом")
+    Container(ibank_backend, "Backend", ".NET Framework 4.5\n/ C#", "Бизнес-логика ИБ.\nОбработка форм, сессий,\nвызовы внутренних и внешних API.\nСМС-подтверждение реализует\nкоманда банка (без ядра подрядчика)")
+    Container(ibank_db, "ИБ БД", "MS SQL", "Данные сессий, пользователей,\nпроводок платежей ИБ")
+    Rel(ibank_ui, ibank_backend, "HTTP-запросы")
+    Rel(ibank_backend, ibank_db, "SQL", "ADO.NET")
 }
 
-System_Ext(sms_gateway, "СМС-шлюз", "Отправка СМС")
+' ──────────────────────────────────────────
+' САЙТ
+' ──────────────────────────────────────────
+System_Boundary(site_boundary, "Сайт") {
+    Container(site_ui, "Frontend", "React.js", "Страница с депозитными продуктами\nи актуальными ставками;\nформа заявки (ФИО + телефон)")
+    Container(site_backend, "Backend", "PHP", "Принимает заявку;\nпередает в Deposit Application Service")
+    Rel(site_ui, site_backend, "HTTPS")
+}
 
-Rel(client, website, "Видит ставки, подает заявку", "HTTPS")
-Rel(client, ib, "Видит персон. предложения, подает заявку", "HTTPS")
+' ──────────────────────────────────────────
+' DEPOSIT APPLICATION SERVICE
+' ──────────────────────────────────────────
+System_Boundary(das_boundary, "Deposit Application Service (новый)") {
+    Container(das_api, "REST API", "Java Spring Boot", "Принимает заявки из ИБ и сайта;\nвозвращает статус заявки")
+    Container(das_kafka_producer, "Kafka Producer", "Java", "Публикует заявки\nв топик Kafka для АБС")
+    Container(das_kafka_consumer, "Kafka Consumer\n(статусы)", "Java", "Получает обратные статусы\nиз АБС")
+    Container(das_sms, "SMS Notifier", "Java Spring Boot", "Отправляет СМС клиенту\nпри изменении статуса заявки")
+    Container(das_db, "Deposit DB", "PostgreSQL", "Реестр заявок на депозиты;\nстатусы; история изменений")
+    Rel(das_api, das_db, "JDBC")
+    Rel(das_api, das_kafka_producer, "публикует заявку")
+    Rel(das_kafka_consumer, das_db, "обновляет статус")
+    Rel(das_kafka_consumer, das_sms, "триггер СМС")
+}
 
-Rel(website, rate_service, "Запрашивает общие ставки", "REST API")
-Rel(ib, rate_service, "Запрашивает персон. ставки", "REST API")
+' ──────────────────────────────────────────
+' RATE SERVICE (новый)
+' ──────────────────────────────────────────
+System_Boundary(rs_boundary, "Rate Service (новый)") {
+    Container(rs_api, "REST API", "Java Spring Boot", "Предоставляет ставки\nдля сайта и ИБ;\nкэширует ответы")
+    Container(rs_db, "Rate DB", "PostgreSQL", "Актуальные ставки\nпо депозитным продуктам;\nдоступны бэк-офису депозитов и кредитов")
+    Rel(rs_api, rs_db, "JDBC")
+}
 
-Rel(website, deposit_service, "Отправляет заявку", "REST API")
-Rel(ib, deposit_service, "Отправляет заявку", "REST API")
+' ──────────────────────────────────────────
+' АБС — детализация (требование задания)
+' ──────────────────────────────────────────
+System_Boundary(abs_boundary, "АБС") {
+    Container(abs_desktop, "Десктоп-клиент", "Delphi", "UI для сотрудников отделений\nи бэк-офиса.\nОбработка заявок на депозит (UC-4).\nУправление ставками (UC-5)")
+    Container(abs_kafka_consumer, "Kafka Consumer\n(заявки)", "Java / PL-SQL wrapper", "Принимает заявки из Deposit Service;\nсоздает записи в БД АБС")
+    Container(abs_kafka_producer, "Kafka Producer\n(статусы)", "Java / PL-SQL wrapper", "Публикует изменения статусов\nзаявок для Deposit Service")
+    Container(abs_db, "АБС БД", "Oracle / PL-SQL", "Клиентская база;\nданные счетов и депозитов;\nзаявки; бухгалтерия банка.\nМасштабируется только вертикально")
+    Rel(abs_desktop, abs_db, "Oracle Net\n/ PL-SQL")
+    Rel(abs_kafka_consumer, abs_db, "PL-SQL")
+    Rel(abs_db, abs_kafka_producer, "триггер / процедура")
+}
 
-Rel(deposit_service, postgres, "Сохраняет данные", "SQL")
-Rel(rate_service, postgres, "Читает/пишет ставки", "SQL")
+' ──────────────────────────────────────────
+' СИСТЕМА КОЛ-ЦЕНТРА
+' ──────────────────────────────────────────
+System_Boundary(cc_boundary, "Система кол-центра") {
+    Container(cc_ui, "Web UI", "React.js", "Интерфейс оператора;\nпросмотр обращений клиентов")
+    Container(cc_backend, "Backend", "Java Spring Boot", "Обработка обращений;\nинтеграция с АБС")
+    Container(cc_db, "КЦ БД", "PostgreSQL", "Обращения клиентов;\nистория звонков")
+    Rel(cc_ui, cc_backend, "REST")
+    Rel(cc_backend, cc_db, "JDBC")
+}
 
-Rel(deposit_service, kafka, "Публикует заявку", "Produce")
-Rel(abs, kafka, "Получает заявку", "Consume")
+' ──────────────────────────────────────────
+' ВНЕШНИЕ СИСТЕМЫ
+' ──────────────────────────────────────────
+System_Ext(sms_gw, "СМС-шлюз\n/ Телеком-оператор", "Доставка СМС клиентам")
 
-Rel(deposit_service, sms_gateway, "Запрос на СМС", "REST API")
+' ──────────────────────────────────────────
+' СВЯЗИ МЕЖДУ СИСТЕМАМИ
+' ──────────────────────────────────────────
+
+' Клиенты → системы
+Rel(new_client, site_ui, "Смотрит ставки, подает заявку (UC-1, UC-3)")
+Rel(existing_client, ibank_ui, "Смотрит ставки, подает заявку (UC-2, UC-3)")
+Rel(cc_operator, cc_ui, "Обрабатывает обращение по заявке с сайта (UC-1)")
+Rel(backoffice_deposit, abs_desktop, "Обрабатывает заявку, подтверждает ставку (UC-4, UC-5)")
+Rel(backoffice_credit, abs_desktop, "Согласует специальные ставки (UC-5)")
+
+' Сайт → сервисы
+Rel(site_backend, das_api, "Передает заявку нового клиента (UC-1)", "REST / HTTPS")
+Rel(site_backend, rs_api, "Получает актуальные ставки (UC-3)", "REST / HTTPS")
+
+' ИБ → сервисы
+Rel(ibank_backend, das_api, "Передаёт заявку клиента (UC-2)", "REST / HTTPS")
+Rel(ibank_backend, rs_api, "Получает ставки, включая персонализированные (UC-3)", "REST / HTTPS")
+
+' Deposit Service → АБС (async)
+Rel(das_kafka_producer, abs_kafka_consumer, "Заявки на депозит (UC-4)", "Kafka topic: deposit-applications")
+Rel(abs_kafka_producer, das_kafka_consumer, "Статусы заявок (UC-4, UC-6)", "Kafka topic: deposit-statuses")
+
+' Deposit Service → СМС
+Rel(das_sms, sms_gw, "Отправляет СМС (UC-6)", "REST / HTTPS")
+
+' Rate Service ↔ АБС
+Rel(rs_api, abs_db, "Синхронизирует ставки (UC-5)", "ограниченный канал / batch")
+
+' КЦ → АБС
+Rel(cc_backend, abs_db, "Передаёт обращение (UC-1)", "интеграция")
+
 @enduml
