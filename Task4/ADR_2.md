@@ -104,7 +104,7 @@ Rate Service из ADR-001 расширяется REST API для кол-цент
 
 ![](./Diagrams/c4_context.png)
 
-![](./Diagrams/c4_containers.png)
+![](./Diagrams/c4_components.png)
 
 #### Список крупных задач по системам
 

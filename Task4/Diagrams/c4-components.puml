@@ -1,0 +1,51 @@
+@startuml c4-components
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Диаграмма компонентов (C4 Level 3) — Rate Service
+
+Person(backoffice, "Сотрудник бэк-офиса")
+
+System_Ext(abs, "АБС", "Oracle / PL-SQL. Источник ставок")
+System_Ext(cc_system, "Система кол-центра", "Потребитель ставок по REST")
+System_Ext(sftp, "SFTP-сервер банка", "Хранилище CSV-файла")
+
+Container_Boundary(rate_svc, "Rate Service (Java Spring Boot)") {
+
+    Component(rate_api, "Rates API Controller", "Spring MVC @RestController\nGET /rates/deposits\nВозвращает список ставок с кэшем\nUC-1, UC-3, UC-4")
+
+    Component(rate_cache, "In-Memory Cache", "Spring Cache / Caffeine\nКэширует ставки\nИнвалидируется при обновлении\nОтклик < 1 сек")
+
+    Component(rate_service_layer, "Rate Service Layer", "Spring @Service\nБизнес-логика и валидация ставок\nТриггерит инвалидацию кэша")
+
+    Component(rate_repo, "Rate Repository", "Spring Data JPA @Repository\nCRUD-операции со ставками в Rate DB")
+
+    Component(abs_sync, "ABS Rate Sync", "Spring @Scheduled\nПериодически читает ставки из АБС\nОбновляет Rate DB. UC-3, UC-5")
+
+    Component(csv_generator, "CSV Generator", "Spring @Service\nФормирует CSV-файл со ставками\nФиксированный формат для партнёра")
+
+    Component(sftp_uploader, "SFTP Uploader", "Spring Integration / JSch\nЗагружает CSV на SFTP-сервер\nSSH-ключи, retry при сбое. UC-2, UC-5")
+
+    Component(sftp_scheduler, "SFTP Scheduler", "Spring @Scheduled\nЗапускает csv_generator и sftp_uploader\nраз в сутки. Мониторинг результата")
+
+    ContainerDb(rate_db, "Rate DB", "PostgreSQL\nАктуальные ставки по продуктам\nИстория изменений")
+}
+
+' Внешние вызовы → Rate Service
+Rel(cc_system, rate_api, "GET /rates/deposits (UC-1, UC-4)", "REST / HTTPS")
+Rel(backoffice, rate_service_layer, "Обновление ставки (UC-3)", "через АБС")
+Rel(abs_sync, abs, "Читает ставки (UC-3)", "ограниченный канал")
+
+' Внутренние связи
+Rel(rate_api, rate_cache, "читает из кэша")
+Rel(rate_cache, rate_service_layer, "cache miss — вызов сервиса")
+Rel(rate_service_layer, rate_repo, "CRUD")
+Rel(rate_repo, rate_db, "JPA / SQL")
+Rel(abs_sync, rate_service_layer, "обновляет ставки")
+Rel(sftp_scheduler, csv_generator, "запускает генерацию")
+Rel(csv_generator, rate_repo, "читает актуальные ставки")
+Rel(sftp_scheduler, sftp_uploader, "передает CSV")
+Rel(sftp_uploader, sftp, "загружает CSV (UC-2, UC-5)", "SFTP / SSH")
+
+@enduml

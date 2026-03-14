@@ -3,27 +3,25 @@
 
 LAYOUT_WITH_LEGEND()
 
-title Диаграмма контекста (C4 Level 1) — Передача ставок в кол-центры
+title Диаграмма контекста (C4 Level 1) — Передача ставок в кол-центр и партнерский кол-центр
 
-Person(backoffice, "Сотрудник бэк-офиса", "Обновляет ставки\nпо депозитам")
-Person(operator_cc, "Оператор кол-центра", "Консультирует клиентов\nпо ставкам")
-Person(operator_pcc, "Оператор партнёрского\nкол-центра", "Консультирует клиентов\nпо ставкам")
-Person(client, "Клиент банка", "Звонит в кол-центр\nдля уточнения ставок")
+Person(backoffice, "Сотрудник бэк-офиса\n(депозиты / кредиты)", "Обновляет ставки по депозитам")
+Person(cc_operator, "Оператор кол-центра банка", "Консультирует клиентов\nпо актуальным ставкам")
+Person(partner_operator, "Оператор партнерского\nкол-центра", "Консультирует клиентов\nпо актуальным ставкам")
 
-System(abs, "АБС", "Автоматизированная\nбанковская система.\nDelphi / Oracle / PL-SQL")
-System(rate_service, "Rate Service", "Сервис ставок.\nЕдиный источник\nактуальных ставок.\nJava Spring Boot / PostgreSQL")
-System(callcenter, "Система кол-центра", "CRM-платформа подрядчика.\nReact.js / Java Spring Boot\n/ PostgreSQL")
-System_Ext(partner_cc, "Система партнёрского\nкол-центра", "Внешняя система.\nПолучает файлы по SFTP")
-System(sftp, "SFTP-сервер банка", "Файловый обменник\nдля партнёрского кол-центра")
+System(rate_svc, "Rate Service", "Единый источник ставок.\nJava Spring Boot / PostgreSQL.\nРасширяется в этом ADR")
+System(cc_system, "Система кол-центра", "React.js / Java Spring Boot\n/ PostgreSQL.\nПлатформа подрядчика")
+System(abs, "АБС", "Delphi / Oracle / PL-SQL.\nИсточник ставок для Rate Service")
+System(sftp, "SFTP-сервер банка", "Промежуточное хранилище\nCSV-файла со ставками")
 
-Rel(backoffice, abs, "Вводит и обновляет ставки")
-Rel(abs, rate_service, "Публикует обновлённые ставки", "REST API / событие")
-Rel(rate_service, callcenter, "Предоставляет актуальные ставки", "REST API")
-Rel(rate_service, sftp, "Генерирует и загружает CSV-файл", "SFTP / по расписанию")
-Rel(sftp, partner_cc, "Партнёр забирает CSV-файл", "SFTP pull")
-Rel(operator_cc, callcenter, "Просматривает ставки в UI")
-Rel(operator_pcc, partner_cc, "Просматривает ставки")
-Rel(client, operator_cc, "Звонит, уточняет ставки")
-Rel(client, operator_pcc, "Звонит, уточняет ставки")
+System_Ext(partner_cc, "Система партнерского\nкол-центра", "Внешняя система.\nЗабирает файл ставок по SFTP")
+
+Rel(backoffice, abs, "Обновляет ставки (UC-3)")
+Rel(abs, rate_svc, "Передает актуальные ставки (UC-3)", "ограниченный канал")
+Rel(rate_svc, cc_system, "Отдаёт ставки по REST API (UC-1, UC-4)", "REST / HTTPS")
+Rel(rate_svc, sftp, "Выгружает CSV-файл по расписанию (UC-2, UC-5)", "SFTP / SSH")
+Rel(partner_cc, sftp, "Забирает CSV-файл (UC-2)", "SFTP / SSH")
+Rel(cc_operator, cc_system, "Смотрит актуальные ставки (UC-1)")
+Rel(partner_operator, partner_cc, "Смотрит актуальные ставки (UC-2)")
 
 @enduml
