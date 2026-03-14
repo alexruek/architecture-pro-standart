@@ -1,0 +1,62 @@
+@startuml c4-components
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Диаграмма компонентов (C4 Level 3) — Loan Application Service
+
+Person(new_client, "Новый клиент")
+Person(existing_client, "Существующий клиент")
+
+System_Ext(site, "Сайт", "PHP / React.js")
+System_Ext(ibank, "Интернет-банк", "ASP.NET MVC 4.5")
+System_Ext(conveyor, "Кредитный конвейер", "Camunda / Oracle")
+System_Ext(bki, "БКИ", "Внешний REST API")
+System_Ext(sms_gw, "СМС-шлюз", "REST API")
+System_Ext(batch_svc, "Pre-Approval Batch", "Java Spring Batch")
+
+Container_Boundary(loan_svc, "Loan Application Service (Java Spring Boot)") {
+
+    Component(loan_api, "Loan API Controller", "Spring MVC @RestController\nПрием заявок из сайта и ИБ\nВыдача предодобренных предложений\nUC-1, UC-2, UC-3")
+
+    Component(bki_client, "BKI Client", "Spring @Component / WebClient\nСинхронный вызов БКИ\nдля новых клиентов с сайта\nUC-1")
+
+    Component(loan_service_layer, "Loan Service Layer", "Spring @Service\nБизнес-логика заявок\nСвязка онлайн-заявки с отделением\nПриоритетность предодобренных заявок\nUC-1, UC-2, UC-3, UC-4")
+
+    Component(preapproval_service, "Pre-Approval Service", "Spring @Service\nВыдача предодобренных предложений\nиз Scoring Cache\nUC-2, UC-3, UC-8")
+
+    Component(kafka_producer, "Kafka Producer", "Spring Kafka @KafkaProducer\nПубликует заявки в топик\nloan-applications\nUC-5")
+
+    Component(kafka_consumer, "Kafka Consumer", "Spring Kafka @KafkaListener\nПолучает статусы заявок\nиз топика loan-statuses\nUC-6, UC-7")
+
+    Component(sms_notifier, "SMS Notifier", "Spring @Service\nОтправляет СМС клиенту\nпри изменении статуса заявки\nUC-7")
+
+    Component(loan_repo, "Loan Repository", "Spring Data JPA @Repository\nCRUD-операции с заявками\nи предодобренными предложениями")
+
+    Component(scoring_cache_repo, "Scoring Cache Repository", "Spring Data JPA @Repository\nЧтение кэша результатов скоринга\nЗапись из Pre-Approval Batch\nUC-8")
+
+    ContainerDb(loan_db, "Loan DB", "PostgreSQL\nРеестр онлайн-заявок; статусы\nПредодобренные предложения\nScoring Cache (snapshot скоринга)")
+}
+
+' Внешние → API
+Rel(site, loan_api, "Передает заявку нового клиента (UC-1)", "REST / HTTPS")
+Rel(ibank, loan_api, "Передает заявку; получает предложение (UC-2, UC-3)", "REST / HTTPS")
+Rel(batch_svc, scoring_cache_repo, "Сохраняет предодобренные предложения (UC-8)", "JDBC")
+
+' Внутренние связи
+Rel(loan_api, bki_client, "запрашивает скоринг нового клиента (UC-1)")
+Rel(bki_client, bki, "GET /credit-history", "REST / HTTPS")
+Rel(loan_api, loan_service_layer, "создать / получить заявку")
+Rel(loan_api, preapproval_service, "получить предодобренное предложение (UC-2)")
+Rel(loan_service_layer, loan_repo, "CRUD заявок")
+Rel(loan_service_layer, kafka_producer, "опубликовать заявку в Кредитный конвейер (UC-5)")
+Rel(preapproval_service, scoring_cache_repo, "читает кэш скоринга")
+Rel(kafka_producer, conveyor, "topic: loan-applications (UC-5)", "Kafka")
+Rel(kafka_consumer, conveyor, "topic: loan-statuses (UC-6)", "Kafka")
+Rel(kafka_consumer, loan_service_layer, "обновить статус заявки")
+Rel(kafka_consumer, sms_notifier, "триггер СМС-уведомления (UC-7)")
+Rel(sms_notifier, sms_gw, "отправить СМС", "REST / HTTPS")
+Rel(loan_repo, loan_db, "JPA / SQL")
+Rel(scoring_cache_repo, loan_db, "JPA / SQL (таблица scoring_cache)")
+
+@enduml
