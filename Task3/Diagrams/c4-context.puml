@@ -1,0 +1,45 @@
+@startuml c4-context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Диаграмма контекста (C4 Level 1) — Онлайн-открытие депозитов и накопительных счетов (MVP)
+
+' Акторы
+Person(new_client, "Новый клиент", "Подает заявку на депозит\nчерез сайт")
+Person(existing_client, "Существующий клиент", "Подает заявку на депозит\nчерез интернет-банк")
+Person(backoffice_deposit, "Сотрудник бэк-офиса\n(депозиты)", "Обрабатывает заявки\nна депозит; управляет ставками")
+Person(backoffice_credit, "Сотрудник бэк-офиса\n(кредиты)", "Участвует в согласовании\nспециальных ставок")
+Person(cc_operator, "Оператор кол-центра", "Консультирует клиента\nпо заявке с сайта")
+
+' Системы банка
+System(site, "Сайт", "PHP / React.js.\nОтображает депозиты,\nпринимает заявки новых клиентов")
+System(ibank, "Интернет-банк", "ASP.NET MVC 4.5 / .NET 4.5\n/ MS SQL.\nПрием заявок существующих\nклиентов с СМС-подтверждением")
+System(deposit_svc, "Deposit Application Service", "Новый сервис.\nJava Spring Boot / PostgreSQL.\nЕдиный реестр заявок;\nasync передача в АБС")
+System(rate_svc, "Rate Service", "Новый сервис.\nJava Spring Boot / PostgreSQL.\nЕдиное хранилище ставок;\nкэширование")
+System(abs, "АБС", "Delphi / Oracle / PL-SQL.\nОсновная банковская система.\nОбработка заявок бэк-офисом;\nучет операций")
+System(cc_system, "Система кол-центра", "React.js / Java Spring Boot\n/ PostgreSQL.\nОбработка обращений клиентов")
+System(sms_gw, "СМС-шлюз", "Интеграция с телеком-оператором.\nОтправка СМС клиентам")
+
+' Внешние системы
+System_Ext(telecom, "Телеком-оператор", "Внешний оператор\nдоставки СМС")
+
+' Связи — клиенты
+Rel(new_client, site, "Смотрит ставки,\nподает заявку")
+Rel(existing_client, ibank, "Смотрит ставки,\nподает заявку,\nподтверждает СМС-кодом")
+Rel(cc_operator, cc_system, "Обрабатывает\nобращение клиента")
+Rel(backoffice_deposit, abs, "Обрабатывает заявки,\nустанавливает ставки (UC-4, UC-5)")
+Rel(backoffice_credit, abs, "Согласует специальные\nставки (UC-5)")
+
+' Связи — системы
+Rel(site, rate_svc, "Получает актуальные ставки (UC-3)", "REST / HTTPS")
+Rel(site, deposit_svc, "Передает заявку нового клиента (UC-1)", "REST / HTTPS")
+Rel(ibank, rate_svc, "Получает ставки,\nв т.ч. персонализированные (UC-3)", "REST / HTTPS")
+Rel(ibank, deposit_svc, "Передает заявку клиента (UC-2)", "REST / HTTPS")
+Rel(deposit_svc, abs, "Передает заявки на обработку (UC-4)", "Kafka async")
+Rel(deposit_svc, sms_gw, "Отправляет СМС клиенту (UC-6)", "REST")
+Rel(cc_system, abs, "Передает обращение клиента (UC-1)", "интеграция")
+Rel(rate_svc, abs, "Читает / синхронизирует ставки (UC-5)", "ограниченный канал")
+Rel(sms_gw, telecom, "Доставляет СМС", "API")
+
+@enduml

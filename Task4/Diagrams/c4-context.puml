@@ -1,0 +1,27 @@
+@startuml c4-context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Диаграмма контекста (C4 Level 1) — Передача ставок в кол-центр и партнерский кол-центр
+
+Person(backoffice, "Сотрудник бэк-офиса\n(депозиты / кредиты)", "Обновляет ставки по депозитам")
+Person(cc_operator, "Оператор кол-центра банка", "Консультирует клиентов\nпо актуальным ставкам")
+Person(partner_operator, "Оператор партнерского\nкол-центра", "Консультирует клиентов\nпо актуальным ставкам")
+
+System(rate_svc, "Rate Service", "Единый источник ставок.\nJava Spring Boot / PostgreSQL.\nРасширяется в этом ADR")
+System(cc_system, "Система кол-центра", "React.js / Java Spring Boot\n/ PostgreSQL.\nПлатформа подрядчика")
+System(abs, "АБС", "Delphi / Oracle / PL-SQL.\nИсточник ставок для Rate Service")
+System(sftp, "SFTP-сервер банка", "Промежуточное хранилище\nCSV-файла со ставками")
+
+System_Ext(partner_cc, "Система партнерского\nкол-центра", "Внешняя система.\nЗабирает файл ставок по SFTP")
+
+Rel(backoffice, abs, "Обновляет ставки (UC-3)")
+Rel(abs, rate_svc, "Передает актуальные ставки (UC-3)", "ограниченный канал")
+Rel(rate_svc, cc_system, "Отдаёт ставки по REST API (UC-1, UC-4)", "REST / HTTPS")
+Rel(rate_svc, sftp, "Выгружает CSV-файл по расписанию (UC-2, UC-5)", "SFTP / SSH")
+Rel(partner_cc, sftp, "Забирает CSV-файл (UC-2)", "SFTP / SSH")
+Rel(cc_operator, cc_system, "Смотрит актуальные ставки (UC-1)")
+Rel(partner_operator, partner_cc, "Смотрит актуальные ставки (UC-2)")
+
+@enduml
